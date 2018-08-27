@@ -197,7 +197,8 @@ int CMMDVMHost::run()
 
 #if !defined(HD44780) && !defined(OLED) && !defined(_OPENWRT)
 		// If we are currently root...
-		if (getuid() == 0) {
+//		if (getuid() == 0) {
+		if (1 == 0) {
 			struct passwd* user = ::getpwnam("mmdvm");
 			if (user == NULL) {
 				::fprintf(stderr, "Could not get the mmdvm user, exiting\n");
