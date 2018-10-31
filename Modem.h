@@ -78,7 +78,16 @@ public:
 	bool writeP25Data(const unsigned char* data, unsigned int length);
 	bool writeNXDNData(const unsigned char* data, unsigned int length);
 	bool writePOCSAGData(const unsigned char* data, unsigned int length);
+
 	bool writeTransparentData(const unsigned char* data, unsigned int length);
+
+	bool writeDStarInfo(const char* my1, const char* my2, const char* your, const char* type, const char* reflector);
+	bool writeDMRInfo(unsigned int slotNo, const std::string& src, bool group, const std::string& dst, const char* type);
+	bool writeYSFInfo(const char* source, const char* dest, const char* type, const char* origin);
+	bool writeP25Info(const char* source, bool group, unsigned int dest, const char* type);
+	bool writeNXDNInfo(const char* source, bool group, unsigned int dest, const char* type);
+	bool writePOCSAGInfo(unsigned int ric, const std::string& message);
+	bool writeIPInfo(const std::string& address);
 
 	bool writeDMRStart(bool tx);
 	bool writeDMRShortLC(const unsigned char* lc);

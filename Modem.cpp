@@ -81,6 +81,7 @@ const unsigned char MMDVM_NAK         = 0x7FU;
 const unsigned char MMDVM_SERIAL      = 0x80U;
 
 const unsigned char MMDVM_TRANSPARENT = 0x90U;
+const unsigned char MMDVM_QSO_INFO    = 0x91U;
 
 const unsigned char MMDVM_DEBUG1      = 0xF1U;
 const unsigned char MMDVM_DEBUG2      = 0xF2U;
@@ -560,7 +561,7 @@ void CModem::clock(unsigned int ms)
 						CUtils::dump(1U, "RX Transparent Data", m_buffer, m_length);
 
 					unsigned char offset = m_sendTransparentDataFrameType;
-					if (offset>1) offset=1;
+					if (offset > 1U) offset = 1U;
 					unsigned char data = m_length - 3U + offset;
 					m_rxTransparentData.addData(&data, 1U);
 
@@ -588,12 +589,12 @@ void CModem::clock(unsigned int ms)
 			case MMDVM_SERIAL:
 				//MMDVMHost does not process serial data from the display,
 				// so we send it to the transparent port if sendFrameType==1
-				if (m_sendTransparentDataFrameType) {
+				if (m_sendTransparentDataFrameType > 0U) {
 					if (m_trace)
 						CUtils::dump(1U, "RX Serial Data", m_buffer, m_length);
 
 					unsigned char offset = m_sendTransparentDataFrameType;
-					if (offset>1) offset=1;
+					if (offset > 1U) offset = 1U;
 					unsigned char data = m_length - 3U + offset;
 					m_rxTransparentData.addData(&data, 1U);
 
@@ -1096,7 +1097,7 @@ bool CModem::writePOCSAGData(const unsigned char* data, unsigned int length)
 
 	::memcpy(buffer + 3U, data, length);
 
-	unsigned char len = length + 3U;		// XXX Check lengths
+	unsigned char len = length + 3U;
 	m_txPOCSAGData.addData(&len, 1U);
 	m_txPOCSAGData.addData(buffer, len);
 
@@ -1114,15 +1115,17 @@ bool CModem::writeTransparentData(const unsigned char* data, unsigned int length
 	buffer[1U] = length + 3U;
 	buffer[2U] = MMDVM_TRANSPARENT;
 
-	if (m_sendTransparentDataFrameType>0) {
+	if (m_sendTransparentDataFrameType > 0U) {
 		::memcpy(buffer + 2U, data, length);
 		length--;
 		buffer[1U]--;
+
 		//when sendFrameType==1 , only 0x80 and 0x90 (MMDVM_SERIAL and MMDVM_TRANSPARENT) are allowed
 		//  and reverted to default (MMDVM_TRANSPARENT) for any other value
 		//when >1, frame type is not checked
-		if (m_sendTransparentDataFrameType==1) {
-			if ((buffer[2U] & 0xE0) != 0x80) buffer[2U] = MMDVM_TRANSPARENT;
+		if (m_sendTransparentDataFrameType == 1U) {
+			if ((buffer[2U] & 0xE0) != 0x80)
+				buffer[2U] = MMDVM_TRANSPARENT;
 		}
 	} else {
 		::memcpy(buffer + 3U, data, length);
@@ -1133,6 +1136,181 @@ bool CModem::writeTransparentData(const unsigned char* data, unsigned int length
 	m_txTransparentData.addData(buffer, len);
 
 	return true;
+}
+
+bool CModem::writeDStarInfo(const char* my1, const char* my2, const char* your, const char* type, const char* reflector)
+{
+	assert(m_serial != NULL);
+	assert(my1 != NULL);
+	assert(my2 != NULL);
+	assert(your != NULL);
+	assert(type != NULL);
+	assert(reflector != NULL);
+
+	unsigned char buffer[50U];
+
+	buffer[0U] = MMDVM_FRAME_START;
+	buffer[1U] = 33U;
+	buffer[2U] = MMDVM_QSO_INFO;
+
+	buffer[3U] = MODE_DSTAR;
+
+	::memcpy(buffer + 4U,  my1,  DSTAR_LONG_CALLSIGN_LENGTH);
+	::memcpy(buffer + 12U, my2,  DSTAR_SHORT_CALLSIGN_LENGTH);
+
+	::memcpy(buffer + 16U, your, DSTAR_LONG_CALLSIGN_LENGTH);
+
+	::memcpy(buffer + 24U, type, 1U);
+
+	::memcpy(buffer + 25U, reflector, DSTAR_LONG_CALLSIGN_LENGTH);
+
+	return m_serial->write(buffer, 33U) != 33;
+}
+
+bool CModem::writeDMRInfo(unsigned int slotNo, const std::string& src, bool group, const std::string& dest, const char* type)
+{
+	assert(m_serial != NULL);
+	assert(type != NULL);
+
+	unsigned char buffer[50U];
+
+	buffer[0U] = MMDVM_FRAME_START;
+	buffer[1U] = 47U;
+	buffer[2U] = MMDVM_QSO_INFO;
+
+	buffer[3U] = MODE_DMR;
+
+	buffer[4U] = slotNo;
+
+	::sprintf((char*)(buffer + 5U), "%20.20s", src.c_str());
+
+	buffer[25U] = group ? 'G' : 'I';
+
+	::sprintf((char*)(buffer + 26U), "%20.20s", dest.c_str());
+
+	::memcpy(buffer + 46U, type, 1U);
+
+	return m_serial->write(buffer, 47U) != 47;
+}
+
+bool CModem::writeYSFInfo(const char* source, const char* dest, const char* type, const char* origin)
+{
+	assert(m_serial != NULL);
+	assert(source != NULL);
+	assert(dest != NULL);
+	assert(type != NULL);
+	assert(origin != NULL);
+
+	unsigned char buffer[50U];
+
+	buffer[0U] = MMDVM_FRAME_START;
+	buffer[1U] = 35U;
+	buffer[2U] = MMDVM_QSO_INFO;
+
+	buffer[3U] = MODE_YSF;
+
+	::memcpy(buffer + 4U,  source, YSF_CALLSIGN_LENGTH);
+	::memcpy(buffer + 14U, dest,   YSF_CALLSIGN_LENGTH);
+
+	::memcpy(buffer + 24U, type, 1U);
+
+	::memcpy(buffer + 25U, origin, YSF_CALLSIGN_LENGTH);
+
+	return m_serial->write(buffer, 35U) != 35;
+}
+
+bool CModem::writeP25Info(const char* source, bool group, unsigned int dest, const char* type)
+{
+	assert(m_serial != NULL);
+	assert(source != NULL);
+	assert(type != NULL);
+
+	unsigned char buffer[40U];
+
+	buffer[0U] = MMDVM_FRAME_START;
+	buffer[1U] = 31U;
+	buffer[2U] = MMDVM_QSO_INFO;
+
+	buffer[3U] = MODE_DMR;
+
+	::sprintf((char*)(buffer + 4U), "%20.20s", source);
+
+	buffer[24U] = group ? 'G' : 'I';
+
+	::sprintf((char*)(buffer + 25U), "%05u", dest);	// 16-bits
+
+	::memcpy(buffer + 30U, type, 1U);
+
+	return m_serial->write(buffer, 31U) != 31;
+}
+
+bool CModem::writeNXDNInfo(const char* source, bool group, unsigned int dest, const char* type)
+{
+	assert(m_serial != NULL);
+	assert(source != NULL);
+	assert(type != NULL);
+
+	unsigned char buffer[40U];
+
+	buffer[0U] = MMDVM_FRAME_START;
+	buffer[1U] = 31U;
+	buffer[2U] = MMDVM_QSO_INFO;
+
+	buffer[3U] = MODE_NXDN;
+
+	::sprintf((char*)(buffer + 4U), "%20.20s", source);
+
+	buffer[24U] = group ? 'G' : 'I';
+
+	::sprintf((char*)(buffer + 25U), "%05u", dest);	// 16-bits
+
+	::memcpy(buffer + 30U, type, 1U);
+
+	return m_serial->write(buffer, 31U) != 31;
+}
+
+bool CModem::writePOCSAGInfo(unsigned int ric, const std::string& message)
+{
+	assert(m_serial != NULL);
+
+	size_t length = message.size();
+
+	unsigned char buffer[250U];
+
+	buffer[0U] = MMDVM_FRAME_START;
+	buffer[1U] = length + 11U;
+	buffer[2U] = MMDVM_QSO_INFO;
+
+	buffer[3U] = MODE_POCSAG;
+
+	::sprintf((char*)(buffer + 4U), "%07u", ric);	// 21-bits
+
+	::memcpy(buffer + 11U, message.c_str(), length);
+
+	int ret = m_serial->write(buffer, length + 11U);
+
+	return ret != int(length + 11U);
+}
+
+bool CModem::writeIPInfo(const std::string& address)
+{
+	assert(m_serial != NULL);
+
+	size_t length = address.size();
+
+	unsigned char buffer[25U];
+
+	buffer[0U] = MMDVM_FRAME_START;
+	buffer[1U] = length + 4U;
+	buffer[2U] = MMDVM_QSO_INFO;
+
+	buffer[3U] = 250U;
+
+	::memcpy(buffer + 4U, address.c_str(), length);
+
+	int ret = m_serial->write(buffer, length + 4U);
+
+	return ret != int(length + 4U);
 }
 
 bool CModem::writeSerial(const unsigned char* data, unsigned int length)
