@@ -90,7 +90,6 @@ m_rfLC(NULL),
 m_netLC(NULL),
 m_rfSeqNo(0U),
 m_rfN(0U),
-m_lastrfN(0U),
 m_netN(0U),
 m_networkWatchdog(1000U, 0U, 1500U),
 m_rfTimeoutTimer(1000U, timeout),
@@ -531,7 +530,6 @@ bool CDMRSlot::writeModem(unsigned char *data, unsigned int len)
 		}
 	} else if (audioSync) {
 		if (m_rfState == RS_RF_AUDIO) {
-			m_lastrfN = 0;
 			// Convert the Audio Sync to be from the BS or MS as needed
 			CSync::addDMRAudioSync(data + 2U, m_duplex);
 
@@ -577,11 +575,6 @@ bool CDMRSlot::writeModem(unsigned char *data, unsigned int len)
 			m_rfN = data[1U] & 0x0FU;
 			if (m_rfN > 5U)
 				return false;
-			if (m_rfN == m_lastrfN)
-				return false;
-			if (m_rfN != (m_lastrfN + 1U))
-				return false;
-			m_lastrfN = m_rfN;
 
 			unsigned int errors = 0U;
 			unsigned char fid = m_rfLC->getFID();
@@ -824,9 +817,6 @@ bool CDMRSlot::writeModem(unsigned char *data, unsigned int len)
 				m_rfN = data[1U] & 0x0FU;
 				if (m_rfN > 5U)
 					return false;
-				if (m_rfN == m_lastrfN)
-					return false;
-				m_lastrfN = m_rfN;
 
 				// Regenerate the EMB
 				emb.getData(data + 2U);
