@@ -20,8 +20,7 @@
 
 CDMRTA::CDMRTA() :
 m_TA(),
-m_buf(),
-m_bufOffset(0)
+m_buf()
 {
 }
 
@@ -29,21 +28,26 @@ CDMRTA::~CDMRTA()
 {
 }
 
-bool CDMRTA::add(const unsigned char* data, unsigned int len)
+bool CDMRTA::add(unsigned int blockId, const unsigned char* data, unsigned int len)
 {
     assert(data != NULL);
+    if (blockId > 3) {
+        // invalid block id
+        reset();
+        return false;
+    }
 
-    if (m_bufOffset + len >= sizeof(m_buf)) {
+    unsigned int offset = blockId * 7;
+
+    if (offset + len >= sizeof(m_buf)) {
         // buffer overflow
         reset();
         return false;
     }
 
-    ::memcpy(m_buf + m_bufOffset, data, len);
-    m_bufOffset += len;
+    ::memcpy(m_buf + offset, data, len);
 
-    decodeTA();
-    return true;
+    return decodeTA();
 }
 
 const unsigned char* CDMRTA::get()
@@ -55,10 +59,9 @@ void CDMRTA::reset()
 {
     ::memset(m_TA, 0, sizeof(m_TA));
     ::memset(m_buf, 0, sizeof(m_buf));
-    m_bufOffset = 0;
 }
 
-void CDMRTA::decodeTA()
+bool CDMRTA::decodeTA()
 {
     unsigned char *b;
     unsigned char c;
@@ -109,12 +112,15 @@ void CDMRTA::decodeTA()
 		break;
     }
 
-    LogMessage("DMR Talker Alias (Data Format %u, Received %u/%u char): '%s'", TAformat, ::strlen(m_TA), TAsize, m_TA);
+    size_t TAlen = ::strlen(m_TA);
+    LogMessage("DMR Talker Alias (Data Format %u, Received %u/%u char): '%s'", TAformat, TAlen, TAsize, m_TA);
 
-	if (::strlen(m_TA) > TAsize) { 
-        if (strlen(m_TA) < 29U)
+	if (TAlen > TAsize) {
+        if (TAlen < 29U)
             strcat(m_TA," ?");
         else
             strcpy(m_TA + 28U," ?");
     }
+
+    return TAlen >= TAsize;
 }
