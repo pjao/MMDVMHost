@@ -1,4 +1,4 @@
-# This makefile is for all platforms, but doesn't include support for the HD44780 display on the Raspberry Pi.
+# This makefile is for all platforms, but doesn't include support for the HD44780, OLED, or PCF8574 displays on the Raspberry Pi.
 
 CC      = gcc
 CXX     = g++
@@ -12,19 +12,22 @@ OBJECTS = \
 		DStarSlowData.o Golay2087.o Golay24128.o Hamming.o I2CController.o LCDproc.o Log.o MMDVMHost.o MobileGPS.o Modem.o ModemSerialPort.o Mutex.o \
 		NetworkInfo.o Nextion.o NullDisplay.o NullModem.o NXDNAudio.o NXDNControl.o NXDNConvolution.o NXDNCRC.o NXDNFACCH1.o NXDNLayer3.o NXDNLICH.o \
 		NXDNLookup.o NXDNNetwork.o NXDNSACCH.o NXDNUDCH.o P25Audio.o P25Control.o P25Data.o P25LowSpeedData.o P25Network.o P25NID.o P25Trellis.o P25Utils.o \
-		POCSAGControl.o POCSAGNetwork.o QR1676.o RS129.o RS241213.o RSSIInterpolator.o SerialController.o SerialPort.o SHA256.o StopWatch.o Sync.o TFTSerial.o \
+		POCSAGControl.o POCSAGNetwork.o QR1676.o RemoteControl.o RS129.o RS241213.o RSSIInterpolator.o SerialController.o SerialPort.o SHA256.o StopWatch.o Sync.o TFTSerial.o \
 		Thread.o Timer.o UDPSocket.o UMP.o Utils.o YSFControl.o YSFConvolution.o YSFFICH.o YSFNetwork.o YSFPayload.o
 
-all:		MMDVMHost
+all:		MMDVMHost RemoteCommand
 
 MMDVMHost:	GitVersion.h $(OBJECTS) 
 		$(CXX) $(OBJECTS) $(CFLAGS) $(LIBS) -o MMDVMHost
+
+RemoteCommand:	Log.o RemoteCommand.o UDPSocket.o
+		$(CXX) Log.o RemoteCommand.o UDPSocket.o $(CFLAGS) $(LIBS) -o RemoteCommand
 
 %.o: %.cpp
 		$(CXX) $(CFLAGS) -c -o $@ $<
 
 clean:
-		$(RM) MMDVMHost *.o *.d *.bak *~ GitVersion.h
+		$(RM) MMDVMHost RemoteCommand *.o *.d *.bak *~ GitVersion.h
 
 # Export the current git version if the index file exists, else 000...
 GitVersion.h:

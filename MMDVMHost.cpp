@@ -1,5 +1,5 @@
 /*
- *   Copyright (C) 2015,2016,2017,2018 by Jonathan Naylor G4KLX
+ *   Copyright (C) 2015-2019 by Jonathan Naylor G4KLX
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -28,6 +28,7 @@
 #include "P25Control.h"
 #include "NXDNControl.h"
 #include "POCSAGControl.h"
+#include "RemoteControl.h"
 #include "Thread.h"
 #include "Log.h"
 #include "GitVersion.h"
@@ -583,6 +584,23 @@ int CMMDVMHost::run()
 		pocsagTimer.start();
 	}
 
+	CRemoteControl* remoteControl = NULL;
+	bool remoteControlEnabled = m_conf.getRemoteControlEnabled();
+	if (remoteControlEnabled) {
+		unsigned int port = m_conf.getRemoteControlPort();
+
+		LogInfo("Remote Control Parameters");
+		LogInfo("    Port; %u", port);
+
+		remoteControl = new CRemoteControl(port);
+
+		ret = remoteControl->open();
+		if (!ret) {
+			delete remoteControl;
+			remoteControl = NULL;
+		}
+	}
+
 	setMode(MODE_IDLE);
 
 	LogMessage("MMDVMHost-%s is running", VERSION);
@@ -909,6 +927,35 @@ int CMMDVMHost::run()
 				m_modem->writeTransparentData(data, len);
 		}
 
+		if (remoteControl != NULL) {
+			REMOTE_COMMAND command = remoteControl->getCommand();
+			switch(command) {
+				case RCD_MODE_IDLE:
+					setMode(MODE_IDLE);
+					break;
+				case RCD_MODE_LOCKOUT:
+					setMode(MODE_LOCKOUT);
+					break;
+				case RCD_MODE_DSTAR:
+					setMode(MODE_DSTAR);
+					break;
+				case RCD_MODE_DMR:
+					setMode(MODE_DMR);
+					break;
+				case RCD_MODE_YSF:
+					setMode(MODE_YSF);
+					break;
+				case RCD_MODE_P25:
+					setMode(MODE_P25);
+					break;
+				case RCD_MODE_NXDN:
+					setMode(MODE_NXDN);
+					break;
+				default:
+					break;
+			}
+		}
+
 		unsigned int ms = stopWatch.elapsed();
 		stopWatch.start();
 
@@ -1050,6 +1097,11 @@ int CMMDVMHost::run()
 	if (transparentSocket != NULL) {
 		transparentSocket->close();
 		delete transparentSocket;
+	}
+
+	if (remoteControl != NULL) {
+		remoteControl->close();
+		delete remoteControl;
 	}
 
 	delete dstar;
