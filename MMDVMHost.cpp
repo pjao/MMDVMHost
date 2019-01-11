@@ -1679,7 +1679,7 @@ bool CMMDVMHost::isBusy() const
 
 void CMMDVMHost::remoteControl()
 {
-	if (m_remoteControl != NULL)
+	if (m_remoteControl == NULL)
 		return;
 
 	REMOTE_COMMAND command = m_remoteControl->getCommand();
