@@ -80,6 +80,7 @@ m_maxRSSI(0U),
 m_minRSSI(0U),
 m_aveRSSI(0U),
 m_rssiCount(0U),
+m_enabled(true),
 m_fp(NULL)
 {
 	assert(display != NULL);
@@ -114,6 +115,9 @@ CP25Control::~CP25Control()
 bool CP25Control::writeModem(unsigned char* data, unsigned int len)
 {
 	assert(data != NULL);
+
+	if (!m_enabled)
+		return false;
 
 	bool sync = data[1U] == 0x01U;
 
@@ -601,6 +605,9 @@ void CP25Control::writeNetwork()
 
 	unsigned int length = m_network->read(data, 100U);
 	if (length == 0U)
+		return;
+
+	if (!m_enabled)
 		return;
 
 	if (m_rfState != RS_RF_LISTENING && m_netState == RS_NET_IDLE)
@@ -1159,4 +1166,24 @@ void CP25Control::closeFile()
 bool CP25Control::isBusy() const
 {
 	return m_rfState != RS_RF_LISTENING || m_netState != RS_NET_IDLE;
+}
+
+void CP25Control::enable(bool enabled)
+{
+	if (!enabled && m_enabled) {
+		m_queue.clear();
+
+		// Reset the RF section
+		m_rfState = RS_RF_LISTENING;
+		m_rfTimeout.stop();
+		m_rfData.reset();
+
+		// Reset the networking section
+		m_netTimeout.stop();
+		m_networkWatchdog.stop();
+		m_netData.reset();
+		m_netState = RS_NET_IDLE;
+	}
+
+	m_enabled = enabled;
 }

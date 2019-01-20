@@ -81,6 +81,7 @@ m_maxRSSI(0U),
 m_minRSSI(0U),
 m_aveRSSI(0U),
 m_rssiCount(0U),
+m_enabled(true),
 m_fp(NULL)
 {
 	assert(display != NULL);
@@ -119,6 +120,9 @@ CDStarControl::~CDStarControl()
 bool CDStarControl::writeModem(unsigned char *data, unsigned int len)
 {
 	assert(data != NULL);
+
+	if (!m_enabled)
+		return false;
 
 	unsigned char type = data[0U];
 
@@ -619,6 +623,9 @@ void CDStarControl::writeNetwork()
 	unsigned char data[DSTAR_HEADER_LENGTH_BYTES + 2U];
 	unsigned int length = m_network->read(data, DSTAR_HEADER_LENGTH_BYTES + 2U);
 	if (length == 0U)
+		return;
+
+	if (!m_enabled)
 		return;
 
 	if ((m_rfState == RS_RF_AUDIO || m_rfState == RS_RF_DATA) && m_netState == RS_NET_IDLE)
@@ -1225,4 +1232,27 @@ void CDStarControl::sendError()
 bool CDStarControl::isBusy() const
 {
 	return m_rfState != RS_RF_LISTENING || m_netState != RS_NET_IDLE;
+}
+
+void CDStarControl::enable(bool enabled)
+{
+	if (!enabled && m_enabled) {
+		m_queue.clear();
+
+		// Reset the RF section
+		m_rfState = RS_RF_LISTENING;
+
+		m_rfTimeoutTimer.stop();
+
+		// Reset the networking section
+		m_netState = RS_NET_IDLE;
+
+		m_lastFrameValid = false;
+
+		m_netTimeoutTimer.stop();
+		m_networkWatchdog.stop();
+		m_packetTimer.stop();
+	}
+
+	m_enabled = enabled;
 }
