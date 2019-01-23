@@ -584,7 +584,7 @@ int CMMDVMHost::run()
 		unsigned int port = m_conf.getRemoteControlPort();
 
 		LogInfo("Remote Control Parameters");
-		LogInfo("    Port; %u", port);
+		LogInfo("    Port: %u", port);
 
 		m_remoteControl = new CRemoteControl(port);
 
@@ -1264,7 +1264,7 @@ bool CMMDVMHost::createDMRNetwork()
 
 		LogInfo("Mobile GPS Parameters");
 		LogInfo("    Address: %s", mobileGPSAddress.c_str());
-		LogInfo("    Port; %u", mobileGPSPort);
+		LogInfo("    Port: %u", mobileGPSPort);
 
 		m_mobileGPS = new CMobileGPS(address, port, m_dmrNetwork);
 
@@ -1819,6 +1819,17 @@ void CMMDVMHost::remoteControl()
 			if (m_nxdn != NULL)
 				processModeCommand(MODE_NXDN, m_nxdnRFModeHang);
 			break;
+		case RCD_PAGE:
+			if (m_pocsag != NULL) {
+				unsigned int ric = m_remoteControl->getArgUInt(0U);
+				std::string text;
+				for (unsigned int i = 1U; i < m_remoteControl->getArgCount(); i++) {
+					if (i > 1U)
+						text += " ";
+					text += m_remoteControl->getArgString(i);
+				}
+				m_pocsag->sendPage(ric, text);
+			}
 		default:
 			break;
 	}
