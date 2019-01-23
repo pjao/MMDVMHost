@@ -114,8 +114,8 @@ private:
   bool createNXDNNetwork();
   bool createPOCSAGNetwork();
 
-  bool isBusy() const;
   void remoteControl();
+  void processModeCommand(unsigned char mode, unsigned int timeout);
 
   void setMode(unsigned char mode);
 
