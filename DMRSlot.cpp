@@ -43,6 +43,7 @@ CDisplay*      CDMRSlot::m_display = NULL;
 bool           CDMRSlot::m_duplex = true;
 CDMRLookup*    CDMRSlot::m_lookup = NULL;
 unsigned int   CDMRSlot::m_hangCount = 3U * 17U;
+bool           CDMRSlot::m_ovcm = true;
 
 CRSSIInterpolator* CDMRSlot::m_rssiMapper = NULL;
 
@@ -231,6 +232,7 @@ bool CDMRSlot::writeModem(unsigned char *data, unsigned int len)
 				return false;
 			}
 
+			lc->setOVCM(m_ovcm);
 			m_rfLC = lc;
 
 			// The standby LC data
@@ -535,11 +537,7 @@ bool CDMRSlot::writeModem(unsigned char *data, unsigned int len)
 			writeNetworkRF(data, dataType);
 
 			if (m_rfFrames == 0U) {
-				std::string src = m_lookup->find(m_rfLC->getSrcId());
-				std::string dst = m_lookup->find(m_rfLC->getDstId());
-				FLCO flco       = m_rfLC->getFLCO();
-
-				LogMessage("DMR Slot %u, ended RF data transmission from %s to %s%s", m_slotNo, src.c_str(), flco == FLCO_GROUP ? "TG " : "", dst.c_str());
+				LogMessage("DMR Slot %u, ended RF data transmission", m_slotNo);
 				writeEndRF();
 			}
 
@@ -781,6 +779,7 @@ bool CDMRSlot::writeModem(unsigned char *data, unsigned int len)
 					return false;
 				}
 
+				lc->setOVCM(m_ovcm);
 				m_rfLC = lc;
 
 				// The standby LC data
@@ -1033,6 +1032,7 @@ void CDMRSlot::writeNetwork(const CDMRData& dmrData)
 				dmrData.getSrcId(), dmrData.getFLCO() == FLCO_GROUP ? "TG" : "", dmrData.getDstId(),
 				srcId, flco == FLCO_GROUP ? "TG" : "", dstId);
 
+		lc->setOVCM(m_ovcm);
 		m_netLC = lc;
 
 		// The standby LC data
@@ -1106,6 +1106,7 @@ void CDMRSlot::writeNetwork(const CDMRData& dmrData)
 			unsigned int dstId = lc->getDstId();
 			unsigned int srcId = lc->getSrcId();
 
+			lc->setOVCM(m_ovcm);
 			m_netLC = lc;
 
 			m_lastFrameValid = false;
@@ -1291,6 +1292,7 @@ void CDMRSlot::writeNetwork(const CDMRData& dmrData)
 			unsigned int dstId = lc->getDstId();
 			unsigned int srcId = lc->getSrcId();
 
+			lc->setOVCM(m_ovcm);
 			m_netLC = lc;
 
 			// The standby LC data
@@ -1677,11 +1679,7 @@ void CDMRSlot::writeNetwork(const CDMRData& dmrData)
 		writeQueueNet(data);
 
 		if (m_netFrames == 0U) {
-			std::string src = m_lookup->find(m_netLC->getSrcId());
-			std::string dst = m_lookup->find(m_netLC->getDstId());
-			FLCO flco       = m_netLC->getFLCO();
-
-			LogMessage("DMR Slot %u, ended network data transmission from %s to %s%s", m_slotNo, src.c_str(), flco == FLCO_GROUP ? "TG " : "", dst.c_str());
+			LogMessage("DMR Slot %u, ended network data transmission", m_slotNo);
 			writeEndNet();
 		}
 	} else {
@@ -1867,7 +1865,7 @@ void CDMRSlot::writeQueueNet(const unsigned char *data)
 	m_queue.addData(data, len);
 }
 
-void CDMRSlot::init(unsigned int colorCode, bool embeddedLCOnly, bool dumpTAData, unsigned int callHang, CModem* modem, CDMRNetwork* network, CDisplay* display, bool duplex, CDMRLookup* lookup, CRSSIInterpolator* rssiMapper, unsigned int jitter)
+void CDMRSlot::init(unsigned int colorCode, bool embeddedLCOnly, bool dumpTAData, unsigned int callHang, CModem* modem, CDMRNetwork* network, CDisplay* display, bool duplex, CDMRLookup* lookup, CRSSIInterpolator* rssiMapper, unsigned int jitter, bool ovcm)
 {
 	assert(modem != NULL);
 	assert(display != NULL);
@@ -1883,6 +1881,7 @@ void CDMRSlot::init(unsigned int colorCode, bool embeddedLCOnly, bool dumpTAData
 	m_duplex         = duplex;
 	m_lookup         = lookup;
 	m_hangCount      = callHang * 17U;
+	m_ovcm           = ovcm;
 
 	m_rssiMapper     = rssiMapper;
 
