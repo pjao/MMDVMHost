@@ -119,7 +119,7 @@ public:
 
   // The DMR section
   bool         getDMREnabled() const;
-  bool         getDMRBeacons() const;
+  DMR_BEACONS  getDMRBeacons() const;
   unsigned int getDMRBeaconInterval() const;
   unsigned int getDMRBeaconDuration() const;
   unsigned int getDMRId() const;
@@ -358,7 +358,7 @@ private:
   unsigned int m_dstarModeHang;
 
   bool         m_dmrEnabled;
-  bool         m_dmrBeacons;
+  DMR_BEACONS  m_dmrBeacons;
   unsigned int m_dmrBeaconInterval;
   unsigned int m_dmrBeaconDuration;
   unsigned int m_dmrId;
