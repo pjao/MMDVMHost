@@ -447,6 +447,7 @@ int CMMDVMHost::run()
 		m_dmrRFModeHang             = m_conf.getDMRModeHang();
 		dmrBeacons                  = m_conf.getDMRBeacons();
 		bool ovcm                   = m_conf.getDMROVCM();
+		bool ovcmRX                 = m_conf.getDMROVCMRX();
 
 		if (txHang > m_dmrRFModeHang)
 			txHang = m_dmrRFModeHang;
@@ -480,6 +481,7 @@ int CMMDVMHost::run()
 		LogInfo("    TX Hang: %us", txHang);
 		LogInfo("    Mode Hang: %us", m_dmrRFModeHang);
 		LogInfo("    OVCM: %s", ovcm ? "on" : "off");
+		LogInfo("    OVCMRX: %s", ovcmRX ? "on" : "off");
 
 		switch (dmrBeacons) {
 			case DMR_BEACONS_NETWORK: {
@@ -510,7 +512,7 @@ int CMMDVMHost::run()
 				break;
 		}
 
-		m_dmr = new CDMRControl(id, colorCode, callHang, selfOnly, embeddedLCOnly, dumpTAData, prefixes, blackList, whiteList, slot1TGWhiteList, slot2TGWhiteList, m_timeout, m_modem, m_dmrNetwork, m_display, m_duplex, m_dmrLookup, rssi, jitter, ovcm);
+		m_dmr = new CDMRControl(id, colorCode, callHang, selfOnly, embeddedLCOnly, dumpTAData, prefixes, blackList, whiteList, slot1TGWhiteList, slot2TGWhiteList, m_timeout, m_modem, m_dmrNetwork, m_display, m_duplex, m_dmrLookup, rssi, jitter, ovcm, ovcmRX);
 
 		m_dmrTXTimer.setTimeout(txHang);
 	}

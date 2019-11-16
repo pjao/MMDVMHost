@@ -44,6 +44,7 @@ bool           CDMRSlot::m_duplex = true;
 CDMRLookup*    CDMRSlot::m_lookup = NULL;
 unsigned int   CDMRSlot::m_hangCount = 3U * 17U;
 bool           CDMRSlot::m_ovcm = false;
+bool           CDMRSlot::m_ovcmRX = false;
 
 CRSSIInterpolator* CDMRSlot::m_rssiMapper = NULL;
 
@@ -1035,7 +1036,7 @@ void CDMRSlot::writeNetwork(const CDMRData& dmrData)
 				dmrData.getSrcId(), dmrData.getFLCO() == FLCO_GROUP ? "TG" : "", dmrData.getDstId(),
 				srcId, flco == FLCO_GROUP ? "TG" : "", dstId);
 
-		lc->setOVCM(m_ovcm);
+		lc->setOVCM(m_ovcmRX);
 		m_netLC = lc;
 
 		// The standby LC data
@@ -1109,7 +1110,7 @@ void CDMRSlot::writeNetwork(const CDMRData& dmrData)
 			unsigned int dstId = lc->getDstId();
 			unsigned int srcId = lc->getSrcId();
 
-			lc->setOVCM(m_ovcm);
+			lc->setOVCM(m_ovcmRX);
 			m_netLC = lc;
 
 			m_lastFrameValid = false;
@@ -1295,7 +1296,7 @@ void CDMRSlot::writeNetwork(const CDMRData& dmrData)
 			unsigned int dstId = lc->getDstId();
 			unsigned int srcId = lc->getSrcId();
 
-			lc->setOVCM(m_ovcm);
+			lc->setOVCM(m_ovcmRX);
 			m_netLC = lc;
 
 			// The standby LC data
@@ -1565,7 +1566,7 @@ void CDMRSlot::writeNetwork(const CDMRData& dmrData)
 			return;
 
 		// set the OVCM bit for the supported csbk
-		csbk.setOVCM(m_ovcm);
+		csbk.setOVCM(m_ovcmRX);
 
 		bool gi = csbk.getGI();
 		unsigned int srcId = csbk.getSrcId();
@@ -1871,7 +1872,7 @@ void CDMRSlot::writeQueueNet(const unsigned char *data)
 	m_queue.addData(data, len);
 }
 
-void CDMRSlot::init(unsigned int colorCode, bool embeddedLCOnly, bool dumpTAData, unsigned int callHang, CModem* modem, CDMRNetwork* network, CDisplay* display, bool duplex, CDMRLookup* lookup, CRSSIInterpolator* rssiMapper, unsigned int jitter, bool ovcm)
+void CDMRSlot::init(unsigned int colorCode, bool embeddedLCOnly, bool dumpTAData, unsigned int callHang, CModem* modem, CDMRNetwork* network, CDisplay* display, bool duplex, CDMRLookup* lookup, CRSSIInterpolator* rssiMapper, unsigned int jitter, bool ovcm, bool ovcmRX)
 {
 	assert(modem != NULL);
 	assert(display != NULL);
@@ -1888,6 +1889,7 @@ void CDMRSlot::init(unsigned int colorCode, bool embeddedLCOnly, bool dumpTAData
 	m_lookup         = lookup;
 	m_hangCount      = callHang * 17U;
 	m_ovcm           = ovcm;
+    m_ovcmRX         = ovcmRX;
 
 	m_rssiMapper     = rssiMapper;
 
