@@ -150,6 +150,7 @@ m_ysfEnabled(false),
 m_p25Enabled(false),
 m_nxdnEnabled(false),
 m_pocsagEnabled(false),
+m_fmEnabled(false),
 m_cwIdTime(0U),
 m_dmrLookup(NULL),
 m_nxdnLookup(NULL),
@@ -642,6 +643,12 @@ int CMMDVMHost::run()
 			setMode(MODE_ERROR);
 		else if (!error && m_mode == MODE_ERROR)
 			setMode(MODE_IDLE);
+
+		unsigned char mode = m_modem->getMode();
+		if (mode == MODE_FM && m_mode != MODE_FM)
+			setMode(mode);
+		else if (mode != MODE_FM && m_mode == MODE_FM)
+			setMode(mode);
 
 		if (m_ump != NULL) {
 			bool tx = m_modem->hasTX();
@@ -1150,6 +1157,7 @@ bool CMMDVMHost::createModem()
 	float p25TXLevel             = m_conf.getModemP25TXLevel();
 	float nxdnTXLevel            = m_conf.getModemNXDNTXLevel();
 	float pocsagTXLevel          = m_conf.getModemPOCSAGTXLevel();
+	float fmTXLevel              = m_conf.getModemFMTXLevel();
 	bool trace                   = m_conf.getModemTrace();
 	bool debug                   = m_conf.getModemDebug();
 	unsigned int colorCode       = m_conf.getDMRColorCode();
@@ -1187,16 +1195,79 @@ bool CMMDVMHost::createModem()
 	LogInfo("    P25 TX Level: %.1f%%", p25TXLevel);
 	LogInfo("    NXDN TX Level: %.1f%%", nxdnTXLevel);
 	LogInfo("    POCSAG TX Level: %.1f%%", pocsagTXLevel);
-	LogInfo("    RX Frequency: %uHz (%uHz)", rxFrequency, rxFrequency + rxOffset);
+	LogInfo("    FM TX Level: %.1f%%", fmTXLevel);
 	LogInfo("    TX Frequency: %uHz (%uHz)", txFrequency, txFrequency + txOffset);
 
 	m_modem = CModem::createModem(port, m_duplex, rxInvert, txInvert, pttInvert, txDelay, dmrDelay, trace, debug);
 	m_modem->setSerialParams(protocol,address);
-	m_modem->setModeParams(m_dstarEnabled, m_dmrEnabled, m_ysfEnabled, m_p25Enabled, m_nxdnEnabled, m_pocsagEnabled);
-	m_modem->setLevels(rxLevel, cwIdTXLevel, dstarTXLevel, dmrTXLevel, ysfTXLevel, p25TXLevel, nxdnTXLevel, pocsagTXLevel);
+	m_modem->setModeParams(m_dstarEnabled, m_dmrEnabled, m_ysfEnabled, m_p25Enabled, m_nxdnEnabled, m_pocsagEnabled, m_fmEnabled);
+	m_modem->setLevels(rxLevel, cwIdTXLevel, dstarTXLevel, dmrTXLevel, ysfTXLevel, p25TXLevel, nxdnTXLevel, pocsagTXLevel, fmTXLevel);
 	m_modem->setRFParams(rxFrequency, rxOffset, txFrequency, txOffset, txDCOffset, rxDCOffset, rfLevel, pocsagFrequency);
 	m_modem->setDMRParams(colorCode);
 	m_modem->setYSFParams(lowDeviation, txHang);
+
+	if (m_fmEnabled) {
+		std::string  callsign          = m_conf.getFMCallsign();
+		unsigned int callsignSpeed     = m_conf.getFMCallsignSpeed();
+		unsigned int callsignFrequency = m_conf.getFMCallsignFrequency();
+		unsigned int callsignTime      = m_conf.getFMCallsignTime();
+		unsigned int callsignHoldoff   = m_conf.getFMCallsignHoldoff();
+		float        callsignHighLevel = m_conf.getFMCallsignHighLevel();
+		float        callsignLowLevel  = m_conf.getFMCallsignLowLevel();
+		bool         callsignAtStart   = m_conf.getFMCallsignAtStart();
+		bool         callsignAtEnd     = m_conf.getFMCallsignAtEnd();
+		std::string  rfAck             = m_conf.getFMRFAck();
+		std::string  extAck            = m_conf.getFMExtAck();
+		unsigned int ackSpeed          = m_conf.getFMAckSpeed();
+		unsigned int ackFrequency      = m_conf.getFMAckFrequency();
+		unsigned int ackMinTime        = m_conf.getFMAckMinTime();
+		unsigned int ackDelay          = m_conf.getFMAckDelay();
+		float        ackLevel          = m_conf.getFMAckLevel();
+		unsigned int timeout           = m_conf.getFMTimeout();
+		float        timeoutLevel      = m_conf.getFMTimeoutLevel();
+		float        ctcssFrequency    = m_conf.getFMCTCSSFrequency();
+		unsigned int ctcssThreshold    = m_conf.getFMCTCSSThreshold();
+		float        ctcssLevel        = m_conf.getFMCTCSSLevel();
+		unsigned int kerchunkTime      = m_conf.getFMKerchunkTime();
+		unsigned int hangTime          = m_conf.getFMHangTime();
+		bool         useCOS            = m_conf.getFMUseCOS();
+		unsigned int rfAudioBoost      = m_conf.getFMRFAudioBoost();
+		float        maxDevLevel       = m_conf.getFMMaxDevLevel();
+		unsigned int extAudioBoost     = m_conf.getFMExtAudioBoost();
+
+		LogInfo("FM Parameters");
+		LogInfo("    Callsign: %s", callsign.c_str());
+		LogInfo("    Callsign Speed: %uWPM", callsignSpeed);
+		LogInfo("    Callsign Frequency: %uHz", callsignFrequency);
+		LogInfo("    Callsign Time: %umins", callsignTime);
+		LogInfo("    Callsign Holdoff: 1/%u", callsignHoldoff);
+		LogInfo("    Callsign High Level: %.1f%%", callsignHighLevel);
+		LogInfo("    Callsign Low Level: %.1f%%", callsignLowLevel);
+		LogInfo("    Callsign At Start: %s", callsignAtStart ? "yes" : "no");
+		LogInfo("    Callsign At End: %s", callsignAtEnd ? "yes" : "no");
+		LogInfo("    RF Ack: %s", rfAck.c_str());
+		// LogInfo("    Ext. Ack: %s", extAck.c_str());
+		LogInfo("    Ack Speed: %uWPM", ackSpeed);
+		LogInfo("    Ack Frequency: %uHz", ackFrequency);
+		LogInfo("    Ack Min Time: %us", ackMinTime);
+		LogInfo("    Ack Delay: %ums", ackDelay);
+		LogInfo("    Ack Level: %.1f%%", ackLevel);
+		LogInfo("    Timeout: %us", timeout);
+		LogInfo("    Timeout Level: %.1f%%", timeoutLevel);
+		LogInfo("    CTCSS Frequency: %.1fHz", ctcssFrequency);
+		LogInfo("    CTCSS Threshold: %u", ctcssThreshold);
+		LogInfo("    CTCSS Level: %.1f%%", ctcssLevel);
+		LogInfo("    Kerchunk Time: %us", kerchunkTime);
+		LogInfo("    Hang Time: %us", hangTime);
+		LogInfo("    Use COS: %s", useCOS ? "yes" : "no");
+		LogInfo("    RF Audio Boost: x%u", rfAudioBoost);
+		LogInfo("    Max. Deviation Level: %.1f%%", maxDevLevel);
+		// LogInfo("    Ext. Audio Boost: x%u", extAudioBoost);
+
+		m_modem->setFMCallsignParams(callsign, callsignSpeed, callsignFrequency, callsignTime, callsignHoldoff, callsignHighLevel, callsignLowLevel, callsignAtStart, callsignAtEnd);
+		m_modem->setFMAckParams(rfAck, ackSpeed, ackFrequency, ackMinTime, ackDelay, ackLevel);
+		m_modem->setFMMiscParams(timeout, timeoutLevel, ctcssFrequency, ctcssThreshold, ctcssLevel, kerchunkTime, hangTime, useCOS, rfAudioBoost, maxDevLevel);
+	}
 
 	bool ret = m_modem->open();
 	if (!ret) {
@@ -1451,6 +1522,7 @@ void CMMDVMHost::readParams()
 	m_p25Enabled    = m_conf.getP25Enabled();
 	m_nxdnEnabled   = m_conf.getNXDNEnabled();
 	m_pocsagEnabled = m_conf.getPOCSAGEnabled();
+	m_fmEnabled     = m_conf.getFMEnabled();
 	m_duplex        = m_conf.getDuplex();
 	m_callsign      = m_conf.getCallsign();
 	m_id            = m_conf.getId();
@@ -1467,6 +1539,7 @@ void CMMDVMHost::readParams()
 	LogInfo("    P25: %s", m_p25Enabled ? "enabled" : "disabled");
 	LogInfo("    NXDN: %s", m_nxdnEnabled ? "enabled" : "disabled");
 	LogInfo("    POCSAG: %s", m_pocsagEnabled ? "enabled" : "disabled");
+	LogInfo("    FM: %s", m_fmEnabled ? "enabled" : "disabled");
 }
 
 void CMMDVMHost::setMode(unsigned char mode)
@@ -1681,6 +1754,45 @@ void CMMDVMHost::setMode(unsigned char mode)
 		m_modeTimer.start();
 		m_cwIdTimer.stop();
 		createLockFile("POCSAG");
+		break;
+
+	case MODE_FM:
+		LogMessage("Mode set to FM");
+		if (m_dstarNetwork != NULL)
+			m_dstarNetwork->enable(false);
+		if (m_dmrNetwork != NULL)
+			m_dmrNetwork->enable(false);
+		if (m_ysfNetwork != NULL)
+			m_ysfNetwork->enable(false);
+		if (m_p25Network != NULL)
+			m_p25Network->enable(false);
+		if (m_nxdnNetwork != NULL)
+			m_nxdnNetwork->enable(false);
+		if (m_pocsagNetwork != NULL)
+			m_pocsagNetwork->enable(false);
+		if (m_dstar != NULL)
+			m_dstar->enable(false);
+		if (m_dmr != NULL)
+			m_dmr->enable(false);
+		if (m_ysf != NULL)
+			m_ysf->enable(false);
+		if (m_p25 != NULL)
+			m_p25->enable(false);
+		if (m_nxdn != NULL)
+			m_nxdn->enable(false);
+		if (m_pocsag != NULL)
+			m_pocsag->enable(false);
+		if (m_mode == MODE_DMR && m_duplex && m_modem->hasTX()) {
+			m_modem->writeDMRStart(false);
+			m_dmrTXTimer.stop();
+		}
+		if (m_ump != NULL)
+			m_ump->setMode(MODE_FM);
+		m_display->setFM();
+		m_mode = MODE_FM;
+		m_modeTimer.stop();
+		m_cwIdTimer.stop();
+		createLockFile("FM");
 		break;
 
 	case MODE_LOCKOUT:

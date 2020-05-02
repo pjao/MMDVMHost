@@ -1,5 +1,5 @@
 /*
- *   Copyright (C) 2011-2018 by Jonathan Naylor G4KLX
+ *   Copyright (C) 2011-2018,2020 by Jonathan Naylor G4KLX
  *
  *   This program is free software; you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -76,6 +76,10 @@ const unsigned char MMDVM_NXDN_LOST   = 0x41U;
 
 const unsigned char MMDVM_POCSAG_DATA = 0x50U;
 
+const unsigned char MMDVM_FM_PARAMS1  = 0x60U;
+const unsigned char MMDVM_FM_PARAMS2  = 0x61U;
+const unsigned char MMDVM_FM_PARAMS3  = 0x62U;
+
 const unsigned char MMDVM_ACK         = 0x70U;
 const unsigned char MMDVM_NAK         = 0x7FU;
 
@@ -114,6 +118,7 @@ m_ysfTXLevel(0U),
 m_p25TXLevel(0U),
 m_nxdnTXLevel(0U),
 m_pocsagTXLevel(0U),
+m_fmTXLevel(0U),
 m_trace(trace),
 m_debug(debug),
 m_rxFrequency(0U),
@@ -125,6 +130,7 @@ m_ysfEnabled(false),
 m_p25Enabled(false),
 m_nxdnEnabled(false),
 m_pocsagEnabled(false),
+m_fmEnabled(false),
 m_rxDCOffset(0),
 m_txDCOffset(0),
 m_serial(NULL),
@@ -161,11 +167,37 @@ m_tx(false),
 m_cd(false),
 m_lockout(false),
 m_error(false),
-m_hwType(HWT_UNKNOWN)
+m_mode(MODE_IDLE),
+m_hwType(HWT_UNKNOWN),
+m_fmCallsign(),
+m_fmCallsignSpeed(20U),
+m_fmCallsignFrequency(1000U),
+m_fmCallsignTime(600U),
+m_fmCallsignHoldoff(0U),
+m_fmCallsignHighLevel(35.0F),
+m_fmCallsignLowLevel(15.0F),
+m_fmCallsignAtStart(true),
+m_fmCallsignAtEnd(true),
+m_fmRfAck("K"),
+m_fmAckSpeed(20U),
+m_fmAckFrequency(1750U),
+m_fmAckMinTime(4U),
+m_fmAckDelay(1000U),
+m_fmAckLevel(80.0F),
+m_fmTimeout(120U),
+m_fmTimeoutLevel(80.0F),
+m_fmCtcssFrequency(88.4F),
+m_fmCtcssThreshold(25U),
+m_fmCtcssLevel(10.0F),
+m_fmKerchunkTime(0U),
+m_fmHangTime(5U),
+m_fmUseCOS(true),
+m_fmRFAudioBoost(1U),
+m_fmMaxDevLevel(90.0F)
 {
-	assert(!port.empty());
-
 	m_buffer = new unsigned char[BUFFER_LENGTH];
+
+	assert(!port.empty());
 }
 
 CModem::~CModem()
@@ -193,7 +225,7 @@ void CModem::setRFParams(unsigned int rxFrequency, int rxOffset, unsigned int tx
 	m_pocsagFrequency = pocsagFrequency + txOffset;
 }
 
-void CModem::setModeParams(bool dstarEnabled, bool dmrEnabled, bool ysfEnabled, bool p25Enabled, bool nxdnEnabled, bool pocsagEnabled)
+void CModem::setModeParams(bool dstarEnabled, bool dmrEnabled, bool ysfEnabled, bool p25Enabled, bool nxdnEnabled, bool pocsagEnabled, bool fmEnabled)
 {
 	m_dstarEnabled  = dstarEnabled;
 	m_dmrEnabled    = dmrEnabled;
@@ -201,9 +233,10 @@ void CModem::setModeParams(bool dstarEnabled, bool dmrEnabled, bool ysfEnabled, 
 	m_p25Enabled    = p25Enabled;
 	m_nxdnEnabled   = nxdnEnabled;
 	m_pocsagEnabled = pocsagEnabled;
+	m_fmEnabled     = fmEnabled;
 }
 
-void CModem::setLevels(float rxLevel, float cwIdTXLevel, float dstarTXLevel, float dmrTXLevel, float ysfTXLevel, float p25TXLevel, float nxdnTXLevel, float pocsagTXLevel)
+void CModem::setLevels(float rxLevel, float cwIdTXLevel, float dstarTXLevel, float dmrTXLevel, float ysfTXLevel, float p25TXLevel, float nxdnTXLevel, float pocsagTXLevel, float fmTXLevel)
 {
 	m_rxLevel       = rxLevel;
 	m_cwIdTXLevel   = cwIdTXLevel;
@@ -213,6 +246,7 @@ void CModem::setLevels(float rxLevel, float cwIdTXLevel, float dstarTXLevel, flo
 	m_p25TXLevel    = p25TXLevel;
 	m_nxdnTXLevel   = nxdnTXLevel;
 	m_pocsagTXLevel = pocsagTXLevel;
+	m_fmTXLevel     = fmTXLevel;
 }
 
 void CModem::setDMRParams(unsigned int colorCode)
@@ -267,6 +301,32 @@ bool CModem::open()
 		delete m_serial;
 		m_serial = NULL;
 		return false;
+	}
+
+	if (m_fmEnabled && m_duplex) {
+		ret = setFMCallsignParams();
+		if (!ret) {
+			m_serial->close();
+			delete m_serial;
+			m_serial = NULL;
+			return false;
+		}
+
+		ret = setFMAckParams();
+		if (!ret) {
+			m_serial->close();
+			delete m_serial;
+			m_serial = NULL;
+			return false;
+		}
+
+		ret = setFMMiscParams();
+		if (!ret) {
+			m_serial->close();
+			delete m_serial;
+			m_serial = NULL;
+			return false;
+		}
 	}
 
 	m_statusTimer.start();
@@ -517,6 +577,8 @@ void CModem::clock(unsigned int ms)
 					m_p25Space    = 0U;
 					m_nxdnSpace   = 0U;
 					m_pocsagSpace = 0U;
+
+					m_mode = m_buffer[4U];
 
 					m_tx = (m_buffer[5U] & 0x01U) == 0x01U;
 
@@ -1437,7 +1499,7 @@ bool CModem::setConfig()
 
 	buffer[0U] = MMDVM_FRAME_START;
 
-	buffer[1U] = 21U;
+	buffer[1U] = 22U;
 
 	buffer[2U] = MMDVM_SET_CONFIG;
 
@@ -1468,6 +1530,8 @@ bool CModem::setConfig()
 		buffer[4U] |= 0x10U;
 	if (m_pocsagEnabled)
 		buffer[4U] |= 0x20U;
+	if (m_fmEnabled && m_duplex)
+		buffer[4U] |= 0x40U;
 
 	buffer[5U] = m_txDelay / 10U;		// In 10ms units
 
@@ -1497,10 +1561,12 @@ bool CModem::setConfig()
 
 	buffer[20U] = (unsigned char)(m_pocsagTXLevel * 2.55F + 0.5F);
 
-	// CUtils::dump(1U, "Written", buffer, 21U);
+	buffer[21U] = (unsigned char)(m_fmTXLevel * 2.55F + 0.5F);
 
-	int ret = m_serial->write(buffer, 21U);
-	if (ret != 21)
+	// CUtils::dump(1U, "Written", buffer, 22U);
+
+	int ret = m_serial->write(buffer, 22U);
+	if (ret != 22)
 		return false;
 
 	unsigned int count = 0U;
@@ -1706,6 +1772,11 @@ HW_TYPE CModem::getHWType() const
 	return m_hwType;
 }
 
+unsigned char CModem::getMode() const
+{
+	return m_mode;
+}
+
 bool CModem::setMode(unsigned char mode)
 {
 	assert(m_serial != NULL);
@@ -1809,6 +1880,218 @@ bool CModem::writeDMRShortLC(const unsigned char* lc)
 	// CUtils::dump(1U, "Written", buffer, 12U);
 
 	return m_serial->write(buffer, 12U) == 12;
+}
+
+void CModem::setFMCallsignParams(const std::string& callsign, unsigned int callsignSpeed, unsigned int callsignFrequency, unsigned int callsignTime, unsigned int callsignHoldoff, float callsignHighLevel, float callsignLowLevel, bool callsignAtStart, bool callsignAtEnd)
+{
+	m_fmCallsign          = callsign;
+	m_fmCallsignSpeed     = callsignSpeed;
+	m_fmCallsignFrequency = callsignFrequency;
+	m_fmCallsignTime      = callsignTime;
+	m_fmCallsignHoldoff   = callsignHoldoff;
+	m_fmCallsignHighLevel = callsignHighLevel;
+	m_fmCallsignLowLevel  = callsignLowLevel;
+	m_fmCallsignAtStart   = callsignAtStart;
+	m_fmCallsignAtEnd     = callsignAtEnd;
+}
+
+void CModem::setFMAckParams(const std::string& rfAck, unsigned int ackSpeed, unsigned int ackFrequency, unsigned int ackMinTime, unsigned int ackDelay, float ackLevel)
+{
+	m_fmRfAck        = rfAck;
+	m_fmAckSpeed     = ackSpeed;
+	m_fmAckFrequency = ackFrequency;
+	m_fmAckMinTime   = ackMinTime;
+	m_fmAckDelay     = ackDelay;
+	m_fmAckLevel     = ackLevel;
+}
+
+void CModem::setFMMiscParams(unsigned int timeout, float timeoutLevel, float ctcssFrequency, unsigned int ctcssThreshold, float ctcssLevel, unsigned int kerchunkTime, unsigned int hangTime, bool useCOS, unsigned int rfAudioBoost, float maxDevLevel)
+{
+	m_fmTimeout      = timeout;
+	m_fmTimeoutLevel = timeoutLevel;
+
+	m_fmCtcssFrequency = ctcssFrequency;
+	m_fmCtcssThreshold = ctcssThreshold;
+	m_fmCtcssLevel     = ctcssLevel;
+
+	m_fmKerchunkTime = kerchunkTime;
+	m_fmHangTime     = hangTime;
+
+	m_fmUseCOS       = useCOS;
+	m_fmRFAudioBoost = rfAudioBoost;
+	m_fmMaxDevLevel  = maxDevLevel;
+}
+
+bool CModem::setFMCallsignParams()
+{
+	assert(m_serial != NULL);
+
+	unsigned char buffer[80U];
+	unsigned char len = 10U + m_fmCallsign.size();
+
+	buffer[0U] = MMDVM_FRAME_START;
+	buffer[1U] = len;
+	buffer[2U] = MMDVM_FM_PARAMS1;
+
+	buffer[3U] = m_fmCallsignSpeed;
+	buffer[4U] = m_fmCallsignFrequency / 10U;
+	buffer[5U] = m_fmCallsignTime;
+	buffer[6U] = m_fmCallsignHoldoff;
+
+	buffer[7U] = (unsigned char)(m_fmCallsignHighLevel * 2.55F + 0.5F);
+	buffer[8U] = (unsigned char)(m_fmCallsignLowLevel * 2.55F + 0.5F);
+
+	buffer[9U] = 0x00U;
+	if (m_fmCallsignAtStart)
+		buffer[9U] |= 0x01U;
+	if (m_fmCallsignAtEnd)
+		buffer[9U] |= 0x02U;
+
+	for (unsigned int i = 0U; i < m_fmCallsign.size(); i++)
+		buffer[10U + i] = m_fmCallsign.at(i);
+
+	// CUtils::dump(1U, "Written", buffer, len);
+
+	int ret = m_serial->write(buffer, len);
+	if (ret != len)
+		return false;
+
+	unsigned int count = 0U;
+	RESP_TYPE_MMDVM resp;
+	do {
+		CThread::sleep(10U);
+
+		resp = getResponse();
+		if (resp == RTM_OK && m_buffer[2U] != MMDVM_ACK && m_buffer[2U] != MMDVM_NAK) {
+			count++;
+			if (count >= MAX_RESPONSES) {
+				LogError("The MMDVM is not responding to the SET_FM_PARAMS1 command");
+				return false;
+			}
+		}
+	} while (resp == RTM_OK && m_buffer[2U] != MMDVM_ACK && m_buffer[2U] != MMDVM_NAK);
+
+	// CUtils::dump(1U, "Response", m_buffer, m_length);
+
+	if (resp == RTM_OK && m_buffer[2U] == MMDVM_NAK) {
+		LogError("Received a NAK to the SET_FM_PARAMS1 command from the modem");
+		return false;
+	}
+
+	return true;
+}
+
+bool CModem::setFMAckParams()
+{
+	assert(m_serial != NULL);
+
+	unsigned char buffer[80U];
+	unsigned char len = 8U + m_fmRfAck.size();
+
+	buffer[0U] = MMDVM_FRAME_START;
+	buffer[1U] = len;
+	buffer[2U] = MMDVM_FM_PARAMS2;
+
+	buffer[3U] = m_fmAckSpeed;
+	buffer[4U] = m_fmAckFrequency / 10U;
+	buffer[5U] = m_fmAckMinTime;
+	buffer[6U] = m_fmAckDelay / 10U;
+
+	buffer[7U] = (unsigned char)(m_fmAckLevel * 2.55F + 0.5F);
+
+	for (unsigned int i = 0U; i < m_fmRfAck.size(); i++)
+		buffer[8U + i] = m_fmRfAck.at(i);
+
+	// CUtils::dump(1U, "Written", buffer, len);
+
+	int ret = m_serial->write(buffer, len);
+	if (ret != len)
+		return false;
+
+	unsigned int count = 0U;
+	RESP_TYPE_MMDVM resp;
+	do {
+		CThread::sleep(10U);
+
+		resp = getResponse();
+		if (resp == RTM_OK && m_buffer[2U] != MMDVM_ACK && m_buffer[2U] != MMDVM_NAK) {
+			count++;
+			if (count >= MAX_RESPONSES) {
+				LogError("The MMDVM is not responding to the SET_FM_PARAMS2 command");
+				return false;
+			}
+		}
+	} while (resp == RTM_OK && m_buffer[2U] != MMDVM_ACK && m_buffer[2U] != MMDVM_NAK);
+
+	// CUtils::dump(1U, "Response", m_buffer, m_length);
+
+	if (resp == RTM_OK && m_buffer[2U] == MMDVM_NAK) {
+		LogError("Received a NAK to the SET_FM_PARAMS2 command from the modem");
+		return false;
+	}
+
+	return true;
+}
+
+bool CModem::setFMMiscParams()
+{
+	assert(m_serial != NULL);
+
+	unsigned char buffer[20U];
+
+	buffer[0U] = MMDVM_FRAME_START;
+	buffer[1U] = 14U;
+	buffer[2U] = MMDVM_FM_PARAMS3;
+
+	buffer[3U] = m_fmTimeout / 5U;
+	buffer[4U] = (unsigned char)(m_fmTimeoutLevel * 2.55F + 0.5F);
+
+	buffer[5U] = (unsigned char)m_fmCtcssFrequency;
+	buffer[6U] = m_fmCtcssThreshold;
+	buffer[7U] = (unsigned char)(m_fmCtcssLevel * 2.55F + 0.5F);
+
+	buffer[8U] = m_fmKerchunkTime;
+	buffer[9U] = m_fmHangTime;
+
+	buffer[10U] = 0x00U;
+	if (m_fmUseCOS)
+		buffer[10U] |= 0x01U;
+
+	buffer[11U] = m_fmRFAudioBoost;
+
+	buffer[12U] = (unsigned char)(m_fmMaxDevLevel * 2.55F + 0.5F);
+
+	buffer[13U] = (unsigned char)(m_rxLevel * 2.55F + 0.5F);
+
+	// CUtils::dump(1U, "Written", buffer, 14U);
+
+	int ret = m_serial->write(buffer, 14U);
+	if (ret != 14)
+		return false;
+
+	unsigned int count = 0U;
+	RESP_TYPE_MMDVM resp;
+	do {
+		CThread::sleep(10U);
+
+		resp = getResponse();
+		if (resp == RTM_OK && m_buffer[2U] != MMDVM_ACK && m_buffer[2U] != MMDVM_NAK) {
+			count++;
+			if (count >= MAX_RESPONSES) {
+				LogError("The MMDVM is not responding to the SET_FM_PARAMS3 command");
+				return false;
+			}
+		}
+	} while (resp == RTM_OK && m_buffer[2U] != MMDVM_ACK && m_buffer[2U] != MMDVM_NAK);
+
+	// CUtils::dump(1U, "Response", m_buffer, m_length);
+
+	if (resp == RTM_OK && m_buffer[2U] == MMDVM_NAK) {
+		LogError("Received a NAK to the SET_FM_PARAMS3 command from the modem");
+		return false;
+	}
+
+	return true;
 }
 
 void CModem::printDebug()
