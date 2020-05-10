@@ -180,6 +180,7 @@ public:
   float        getFMCallsignLowLevel() const;
   bool         getFMCallsignAtStart() const;
   bool         getFMCallsignAtEnd() const;
+  bool         getFMCallsignAtLatch() const;
   std::string  getFMRFAck() const;
   std::string  getFMExtAck() const;
   unsigned int getFMAckSpeed() const;
@@ -195,6 +196,7 @@ public:
   unsigned int getFMKerchunkTime() const;
   unsigned int getFMHangTime() const;
   bool         getFMUseCOS() const;
+  bool         getFMCOSInvert() const;
   unsigned int getFMRFAudioBoost() const;
   float        getFMMaxDevLevel() const;
   unsigned int getFMExtAudioBoost() const;
@@ -445,6 +447,7 @@ private:
   float        m_fmCallsignLowLevel;
   bool         m_fmCallsignAtStart;
   bool         m_fmCallsignAtEnd;
+  bool         m_fmCallsignAtLatch;
   std::string  m_fmRFAck;
   std::string  m_fmExtAck;
   unsigned int m_fmAckSpeed;
@@ -460,6 +463,7 @@ private:
   unsigned int m_fmKerchunkTime;
   unsigned int m_fmHangTime;
   bool         m_fmUseCOS;
+  bool         m_fmCOSInvert;
   unsigned int m_fmRFAudioBoost;
   float        m_fmMaxDevLevel;
   unsigned int m_fmExtAudioBoost;
